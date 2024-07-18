@@ -45,8 +45,9 @@ PostgreSQL 12+
     ```sh
     pip install -r requirements.txt
     ```
+4. Crie um arquivo `.env` na raiz do projeto com de acordo com o arquivo `.env.example`:
 
-4. Configuração do Postgresql
+5. Configuração do Postgresql
 
     #### Pré-requisitos:
    - PostgreSQL instalado. Se você estiver usando um sistema operacional baseado em Unix, pode instalar o PostgreSQL com o seguinte comando: `sudo apt update && sudo apt install postgresql` no linux ou acesse "https://www.postgresql.org/download/" para mais informações sobre outros OS.
@@ -84,26 +85,26 @@ PostgreSQL 12+
             ```
         Substitua `"admin"` pelo nome de usuário desejado e `"1234"` pela senha desejada.
 
-5. Execute as migrações:
+6. Execute as migrações:
 
     ```sh
     python manage.py makemigrations
     python manage.py migrate
     ```
 
-6. Crie um superusuário para acessar a administração do Django:
+7. Crie um superusuário para acessar a administração do Django:
 
     ```sh
     python manage.py createsuperuser
     ```
 
-7. Para importar dados do `sinda` para a base de dados, utilize o comando customizado:
+8. Para importar dados do `sinda` para a base de dados, utilize o comando customizado:
 
     ```sh
     python manage.py import_stations
     ```
 
-8. Inicie o servidor em ambiente de desenvolvimento:
+9. Inicie o servidor em ambiente de desenvolvimento:
 
     ```sh
     python manage.py runserver
@@ -112,7 +113,7 @@ PostgreSQL 12+
 
 1. Certifique-se de que o Docker esteja <b><a href="https://docs.docker.com/engine/install/">instalado</a></b> e em execução. 
 
-2. Crie um arquivo `.env` na raiz do projeto com de acordo com o arquivo `.env.example`:
+2. Certifique-se de que o arquivo `.env` foi criado na raiz do projeto com de acordo com o arquivo `.env.example`:
 
 3. Construa e inicie os contêineres:
 
