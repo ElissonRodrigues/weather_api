@@ -147,6 +147,7 @@ PostgreSQL 12+
     ```
     exit
     ```
+9. Pronto. O projeto já está configurado e funcionando
 
 ## Autenticação
 
