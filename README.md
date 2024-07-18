@@ -28,7 +28,7 @@ PostgreSQL 12+
 1. Clone o repositório:
 
     ```sh
-    git clone https://github.com/seu-usuario/weather-api.git
+    git clone https://github.com/ElissonRodrigues/weather_api
     cd weather-api
     ```
 
@@ -153,7 +153,7 @@ A autenticação é feita utilizando JWT (JSON Web Tokens). Atualmente, o projet
 
 1. <b>Token Administrador:</b> Gerado a partir de um usuário administrador. Com este token, é possível acessar todas as funcionalidades da API.
 
-2. Token de Usuário: Gerado a partir de um usuário comum. Este token não tem acesso a certas funcionalidades restritas a administradores.
+2. <b>Token de Usuário:</b> Gerado a partir de um usuário comum. Este token não tem acesso a certas funcionalidades restritas a administradores.
 
 
 ### Gerar Token de Acesso apartir de um usuário existente
