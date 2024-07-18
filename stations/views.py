@@ -2,17 +2,17 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from .models import Station, RegistrationData
-from rest_framework.serializers import CharField
 from .serializers import StationSerializer, RegistrationDataSerializer, StationUpdateSerializer
 from typing import Optional, Dict, Any, List
 import pandas as pd
 import statsmodels.api as sm
-from drf_spectacular.utils import extend_schema, OpenApiResponse, inline_serializer
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 from django.http import HttpRequest
 from users.models import User
 from warnings import filterwarnings
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
 from statsmodels.tools.sm_exceptions import ValueWarning
+import logging
 
 # ---------------------------- Suprimir avisos específicos ---------------------------- #
 
@@ -92,10 +92,14 @@ def stations(request: HttpRequest) -> Optional[Response]:
     Returns:
         Response: Um objeto de resposta HTTP contendo uma lista de todas as estações em formato JSON. Se não houver estações, a lista retornada estará vazia.
     """
-    if request.method == "GET":
-        stations = Station.objects.all()
-        serializer = StationSerializer(stations, many=True)
-        return response_template(data=serializer.data)
+    try:
+        if request.method == "GET":
+            stations = Station.objects.all()
+            serializer = StationSerializer(stations, many=True)
+            return response_template(data=serializer.data)
+    except Exception as e:
+        logging.error(f"Erro ao processar a requisição: {e}", exc_info=True)
+        return response_template(errors={"message": "Erro interno no servidor."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @extend_schema(
@@ -149,40 +153,44 @@ def stations_by_id(request: HttpRequest, pk: int) -> Optional[Response]:
             Se a estação especificada não for encontrada, retorna um erro 404.
             Se o método PUT ou DELETE é chamado por um usuário não administrador, retorna um erro 403.
     """
-    if request.method in ["PUT", "DELETE"] and not is_user_admin(request.user):
-        return response_template(errors={"message": "Acesso negado! apenas adminstradores podem modificar esses dados."}, status=status.HTTP_403_FORBIDDEN)
-     
     try:
-        station = Station.objects.get(pk=pk)
-    except Station.DoesNotExist:
-        return response_template(errors={"message": "Estação não encontrada, verifique o ID da estação"}, status=status.HTTP_404_NOT_FOUND)
-
-    if request.method == "GET":
-        station_serializer = StationSerializer(station)
-        response_data = station_serializer.data
+        if request.method in ["PUT", "DELETE"] and not is_user_admin(request.user):
+            return response_template(errors={"message": "Acesso negado! apenas adminstradores podem modificar esses dados."}, status=status.HTTP_403_FORBIDDEN)
         
-        return response_template(data=response_data, status=status.HTTP_200_OK)
+        try:
+            station = Station.objects.get(pk=pk)
+        except Station.DoesNotExist:
+            return response_template(errors={"message": "Estação não encontrada, verifique o ID da estação"}, status=status.HTTP_404_NOT_FOUND)
 
-    elif request.method == "PUT":
-        data_value = ['station_name', 'city', 'owner', 'latitude', 'longitude', 'uf']
+        if request.method == "GET":
+            station_serializer = StationSerializer(station)
+            response_data = station_serializer.data
+            
+            return response_template(data=response_data, status=status.HTTP_200_OK)
 
-        if not any(field in request.data for field in data_value):
-            return response_template(errors={"message": "é necessário informar pelo menos um campo para a atualização."}, status=status.HTTP_400_BAD_REQUEST)
+        elif request.method == "PUT":
+            data_value = ['station_name', 'city', 'owner', 'latitude', 'longitude', 'uf']
+
+            if not any(field in request.data for field in data_value):
+                return response_template(errors={"message": "é necessário informar pelo menos um campo para a atualização."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            serializer = StationUpdateSerializer(station, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                updated_fields = ', '.join(serializer.validated_data.keys())
+                return response_template(data={"message": f"{updated_fields} foram atualizados na estação {pk}"}, status=status.HTTP_202_ACCEPTED)
         
-        serializer = StationUpdateSerializer(station, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            updated_fields = ', '.join(serializer.validated_data.keys())
-            return response_template(data={"message": f"{updated_fields} foram atualizados na estação {pk}"}, status=status.HTTP_202_ACCEPTED)
-    
-        else:
-            return response_template(errors=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-            #return response_template(errors={"message": "é necessário informar pelo menos um campo para a atualização."}, status=status.HTTP_400_BAD_REQUEST)
-        
-    elif request.method == "DELETE":
-        station.delete()
-        return response_template(data={"message": "Estação deletada com sucesso."}, status=status.HTTP_204_NO_CONTENT)
+            else:
+                return response_template(errors=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                #return response_template(errors={"message": "é necessário informar pelo menos um campo para a atualização."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        elif request.method == "DELETE":
+            station.delete()
+            return response_template(data={"message": "Estação deletada com sucesso."}, status=status.HTTP_204_NO_CONTENT)
 
+    except Exception as e:
+        logging.error(f"Erro ao processar a requisição: {e}", exc_info=True)
+        return response_template(errors={"message": "Erro interno no servidor."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @extend_schema(
     description="Cria uma nova estação com os dados fornecidos.",
@@ -208,16 +216,19 @@ def station_create(request: HttpRequest) -> Optional[Response]:
         Response: Um objeto de resposta HTTP. Se a criação for bem-sucedida, retorna os dados da estação 
         criada e um status HTTP 201. Se a validação falhar, retorna uma mensagem de erro e um status HTTP 400.
     """
-    if request.method == "POST":
-        serializer = StationSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return response_template(data=serializer.data, status=status.HTTP_201_CREATED)
-        else:
-            erros = ', '.join(serializer.errors.keys())
+    try:
+        if request.method == "POST":
+            serializer = StationSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return response_template(data=serializer.data, status=status.HTTP_201_CREATED)
+            else:
+                erros = ', '.join(serializer.errors.keys())
 
-            return response_template(errors={"message": f"Erro ao criar a estação. Campos obrigatórios: [{erros}]"}, status=status.HTTP_400_BAD_REQUEST)
-
+                return response_template(errors={"message": f"Erro ao criar a estação. Campos obrigatórios: [{erros}]"}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        logging.error(f"Erro ao processar a requisição: {e}", exc_info=True)
+        return response_template(errors={"message": "Erro interno no servidor."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # --------------------------------- Dados históricos --------------------------------- #
 @extend_schema(
@@ -238,10 +249,15 @@ def historical_data(request: HttpRequest) -> Optional[Response]:
     Returns:
         Response: Um objeto de resposta HTTP contendo os dados históricos de registro de todas as estações em formato serializado.
     """
-    data = RegistrationData.objects.all()
-    serializer = RegistrationDataSerializer(data, many=True)
-    return response_template(data=serializer.data, status=status.HTTP_200_OK)
+    try:
+        data = RegistrationData.objects.all()
+        serializer = RegistrationDataSerializer(data, many=True)
+        return response_template(data=serializer.data, status=status.HTTP_200_OK)
     
+    except Exception as e:
+        logging.error(f"Erro ao processar a requisição: {e}", exc_info=True)
+        return response_template(errors={"message": "Erro interno no servidor."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 @extend_schema(
     description="Recupera e retorna os dados históricos de registro para uma estação específica.",
@@ -270,13 +286,18 @@ def historical_data_by_id(request: HttpRequest, pk: int) -> Optional[Response]:
         se a estação for encontrada. Caso contrário, retorna uma mensagem de erro indicando que a estação não foi encontrada.
     """
     try:
-        Station.objects.get(pk=pk)
-    except Station.DoesNotExist:
-        return response_template(errors={"message": "Estação não encontrada, verifique o ID da estação"}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            Station.objects.get(pk=pk)
+        except Station.DoesNotExist:
+            return response_template(errors={"message": "Estação não encontrada, verifique o ID da estação"}, status=status.HTTP_404_NOT_FOUND)
 
-    data = RegistrationData.objects.filter(station_id=pk)
-    serializer = RegistrationDataSerializer(data, many=True)
-    return response_template(data=serializer.data, status=status.HTTP_200_OK)
+        data = RegistrationData.objects.filter(station_id=pk)
+        serializer = RegistrationDataSerializer(data, many=True)
+        return response_template(data=serializer.data, status=status.HTTP_200_OK)
+    
+    except Exception as e:
+        logging.error(f"Erro ao processar a requisição: {e}", exc_info=True)
+        return response_template(errors={"message": "Erro interno no servidor."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # --------------------------------- Análise e Previsão --------------------------------- #
@@ -309,57 +330,62 @@ def predict(request: HttpRequest, pk: int) -> Optional[Response]:
         de erro se a estação especificada não for encontrada ou se houver dados faltantes.
     """
     try:
-        Station.objects.get(pk=pk)
-    except Station.DoesNotExist:
-        return response_template(errors={"message": "Estação não encontrada, verifique o ID da estação"}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            Station.objects.get(pk=pk)
+        except Station.DoesNotExist:
+            return response_template(errors={"message": "Estação não encontrada, verifique o ID da estação"}, status=status.HTTP_404_NOT_FOUND)
 
-    data = RegistrationData.objects.filter(station_id=pk)
-    serializer = RegistrationDataSerializer(data, many=True)
+        data = RegistrationData.objects.filter(station_id=pk)
+        serializer = RegistrationDataSerializer(data, many=True)
 
-    if serializer.data:
-        df = pd.DataFrame(serializer.data)
-        df['data'] = pd.to_datetime(df['DataHora_GMT'])
-        df.set_index('data', inplace=True)
+        if serializer.data:
+            df = pd.DataFrame(serializer.data)
+            df['data'] = pd.to_datetime(df['DataHora_GMT'])
+            df.set_index('data', inplace=True)
 
-        previsoes = {}
+            previsoes = {}
 
-        # Função auxiliar para fazer previsão
-        def fazer_previsao(serie, nome):
-            ts = serie.astype(float).dropna()
-            if ts.empty:
-                return None
-            model = sm.tsa.ARIMA(ts, order=(5, 1, 0))
-            results = model.fit()
-            forecast = results.get_forecast(steps=7)
-            previsao = forecast.predicted_mean
-            erro_padrao = forecast.se_mean
-            intervalo_confianca = forecast.conf_int(alpha=0.05)
-            return {
-                'previsao': [round(val, 2) for val in previsao],
-                'erro_padrao': [round(val, 4) for val in erro_padrao],
-                'intervalo_confianca': {
-                    'limite_inferior': [round(val, 2) for val in intervalo_confianca.iloc[:, 0]],
-                    'limite_superior': [round(val, 2) for val in intervalo_confianca.iloc[:, 1]]
+            # Função auxiliar para fazer previsão
+            def fazer_previsao(serie, nome): #type: ignore
+                ts = serie.astype(float).dropna()
+                if ts.empty:
+                    return None
+                model = sm.tsa.ARIMA(ts, order=(5, 1, 0))
+                results = model.fit()
+                forecast = results.get_forecast(steps=7)
+                previsao = forecast.predicted_mean
+                erro_padrao = forecast.se_mean
+                intervalo_confianca = forecast.conf_int(alpha=0.05)
+                return {
+                    'previsao': [round(val, 2) for val in previsao],
+                    'erro_padrao': [round(val, 4) for val in erro_padrao],
+                    'intervalo_confianca': {
+                        'limite_inferior': [round(val, 2) for val in intervalo_confianca.iloc[:, 0]],
+                        'limite_superior': [round(val, 2) for val in intervalo_confianca.iloc[:, 1]]
+                    }
                 }
-            }
 
-        # Verificar e fazer previsões para cada campo
-        campos = ['TempAr_C', 'Bateria_volts', 'NivRegua_m', 'Pluvio_mm']
-        for campo in campos:
-            if df[campo].isnull().sum() == 0:
-                previsoes[campo] = fazer_previsao(df[campo], campo)
+            # Verificar e fazer previsões para cada campo
+            campos = ['TempAr_C', 'Bateria_volts', 'NivRegua_m', 'Pluvio_mm']
+            for campo in campos:
+                if df[campo].isnull().sum() == 0:
+                    previsoes[campo] = fazer_previsao(df[campo], campo)
 
-        if not previsoes:
-            return response_template(errors={'mensagem': 'Não há dados suficientes para fazer previsões.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not previsoes:
+                return response_template(errors={'mensagem': 'Não há dados suficientes para fazer previsões.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        return response_template(data={
-            'mensagem': 'Previsão para os próximos 7 dias.',
-            'dados': previsoes
-        }, status=status.HTTP_200_OK)
+            return response_template(data={
+                'mensagem': 'Previsão para os próximos 7 dias.',
+                'dados': previsoes
+            }, status=status.HTTP_200_OK)
+        
+        else:
+            return response_template(errors={"message": "Sem dados históricos para analisar. Tente novamente com outro ID"}, status=status.HTTP_404_NOT_FOUND)
+
+    except Exception as e:
+        logging.error(f"Erro ao processar a requisição: {e}", exc_info=True)
+        return response_template(errors={"message": "Erro interno no servidor."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-    else:
-        return response_template(errors={"message": "Sem dados históricos para analisar. Tente novamente com outro ID"}, status=status.HTTP_404_NOT_FOUND)
-
 @extend_schema(
     description="Realiza uma análise estatística dos dados de uma estação específica.",
     methods=['GET'],
@@ -384,37 +410,42 @@ def analyze(request: HttpRequest, pk: int) -> Optional[Response]:
         Response: 
             200: Um objeto de resposta HTTP contendo um dicionário com os resultados da análise estatística ou uma mensagem de erro se a estação especificada não for encontrada.
             500: Erro interno no servidor.
-    """    
-    try:
-        Station.objects.get(pk=pk)
-    except Station.DoesNotExist:
-        return response_template(errors={"message": "Estação não encontrada, verifique o ID da estação"}, status=status.HTTP_404_NOT_FOUND)
+    """  
+    try:  
+        try:
+            Station.objects.get(pk=pk)
+        except Station.DoesNotExist:
+            return response_template(errors={"message": "Estação não encontrada, verifique o ID da estação"}, status=status.HTTP_404_NOT_FOUND)
 
-    data = RegistrationData.objects.filter(station_id=pk)
-    serializer = RegistrationDataSerializer(data, many=True)
+        data = RegistrationData.objects.filter(station_id=pk)
+        serializer = RegistrationDataSerializer(data, many=True)
 
-    if serializer.data:
-        df = pd.DataFrame(serializer.data)
-        if df.empty:
+        if serializer.data:
+            df = pd.DataFrame(serializer.data)
+            if df.empty:
+                return response_template(errors={"message": "Sem dados históricos para analisar. Tente novamente com outro ID"}, status=status.HTTP_404_NOT_FOUND)
+
+            campos_interesse = ['Pluvio_mm', 'NivRegua_m', 'Bateria_volts']
+            
+            df[campos_interesse] = df[campos_interesse].apply(pd.to_numeric, errors='coerce')
+
+            # Estatísticas descritivas básicas
+            analysis_result = df[campos_interesse].describe().to_dict()
+
+            # Estatísticas adicionais
+            analysis_result['mediana'] = df[campos_interesse].median().to_dict()
+            analysis_result['valor_mais_frequente'] = df[campos_interesse].mode().iloc[0].to_dict()  
+            analysis_result['quantis '] = df[campos_interesse].quantile([0.25, 0.5, 0.75]).to_dict()
+            analysis_result['variancia'] = df[campos_interesse].var().to_dict()
+            analysis_result['desvio_padrao'] = df[campos_interesse].std().to_dict()
+            analysis_result['assimetria'] = df[campos_interesse].skew().to_dict()
+            analysis_result['curtose'] = df[campos_interesse].kurtosis().to_dict()
+            analysis_result['contagem_nao_nulos'] = df[campos_interesse].count().to_dict()
+
+            return response_template(data=analysis_result, status=status.HTTP_200_OK)
+        else:
             return response_template(errors={"message": "Sem dados históricos para analisar. Tente novamente com outro ID"}, status=status.HTTP_404_NOT_FOUND)
 
-        campos_interesse = ['Pluvio_mm', 'NivRegua_m', 'Bateria_volts']
-        
-        df[campos_interesse] = df[campos_interesse].apply(pd.to_numeric, errors='coerce')
-
-        # Estatísticas descritivas básicas
-        analysis_result = df[campos_interesse].describe().to_dict()
-
-        # Estatísticas adicionais
-        analysis_result['mediana'] = df[campos_interesse].median().to_dict()
-        analysis_result['valor_mais_frequente'] = df[campos_interesse].mode().iloc[0].to_dict()  
-        analysis_result['quantis '] = df[campos_interesse].quantile([0.25, 0.5, 0.75]).to_dict()
-        analysis_result['variancia'] = df[campos_interesse].var().to_dict()
-        analysis_result['desvio_padrao'] = df[campos_interesse].std().to_dict()
-        analysis_result['assimetria'] = df[campos_interesse].skew().to_dict()
-        analysis_result['curtose'] = df[campos_interesse].kurtosis().to_dict()
-        analysis_result['contagem_nao_nulos'] = df[campos_interesse].count().to_dict()
-
-        return response_template(data=analysis_result, status=status.HTTP_200_OK)
-    else:
-        return response_template(errors={"message": "Sem dados históricos para analisar. Tente novamente com outro ID"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logging.error(f"Erro ao processar a requisição: {e}", exc_info=True)
+        return response_template(errors={"message": "Erro interno no servidor."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -13,6 +13,9 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 from pathlib import Path
 from datetime import timedelta
 from decouple import config
+import logging
+from datetime import datetime
+from pytz import timezone
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -29,6 +32,19 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+# Criar pasta para salvar os logs
+Path("./logs").mkdir(parents=True, exist_ok=True)
+
+logging.Formatter.converter = lambda *args: datetime.now(tz=timezone("America/Sao_Paulo")).timetuple()  # type: ignore
+fileHandler = logging.FileHandler("./logs/system.log")
+fileHandler.setLevel(logging.ERROR)
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    datefmt="[ %d/%m/%Y %H:%M:%S ]",
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[fileHandler]
+)
 
 # Application definition
 

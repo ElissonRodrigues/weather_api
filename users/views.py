@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAdminUser
 from typing import Optional
 from drf_spectacular.utils import extend_schema, OpenApiResponse, inline_serializer
 from rest_framework import serializers
+import logging
 
 @extend_schema(
     description="Registra um novo usuário no sistema.",
@@ -43,24 +44,30 @@ def register_user(request: HttpRequest) -> Optional[Response]:
 
     Returns:
         Response: Um objeto de resposta HTTP contendo tokens de acesso e atualização se o registro for bem-sucedido, ou uma mensagem de erro se houver problemas com os dados fornecidos.
-    """   
-    if request.method == 'POST':
+    """
+    try:
+        if request.method == 'POST':
+            
+            username = request.data.get('username')
+            password = request.data.get('password')
+
+            if username is None or password is None:
+                return Response({'error': 'é necessário informar o "username" e password'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if User.objects.filter(username=username).exists():
+                return Response({'error': 'Esse usuário já existe. Escolha outro usuário'}, status=status.HTTP_400_BAD_REQUEST)
+
+            user = User.objects.create_user(username=username, password=password)
+            user.save()
+
+            refresh = RefreshToken.for_user(user)
+
+            return Response({
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            }, status=status.HTTP_201_CREATED)
         
-        username = request.data.get('username')
-        password = request.data.get('password')
-
-        if username is None or password is None:
-            return Response({'error': 'é necessário informar o "username" e password'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if User.objects.filter(username=username).exists():
-            return Response({'error': 'Esse usuário já existe. Escolha outro usuário'}, status=status.HTTP_400_BAD_REQUEST)
-
-        user = User.objects.create_user(username=username, password=password)
-        user.save()
-
-        refresh = RefreshToken.for_user(user)
-
-        return Response({
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-        }, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        logging.error(e)
+        return Response({"message": "Erro interno no servidor."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        

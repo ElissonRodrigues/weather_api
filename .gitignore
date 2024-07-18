@@ -12,6 +12,9 @@ test/
 # Ignore .auth folder
 .auth/
 
+# ignore logs folder
+logs/
+
 # Ignorar todos os arquivos na pasta migrations
 **/migrations/*
 
