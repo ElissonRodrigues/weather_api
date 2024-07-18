@@ -23,9 +23,9 @@ PostgreSQL 12+
 - statsmodels==0.14.2
 - lxml==5.2.2
 
-### Instalação
+### Instalação Manual
 
-1. Clone o repositório:
+1. Clone o repositório (passo obrigatório manual e docker):
 
     ```sh
     git clone https://github.com/ElissonRodrigues/weather_api
