@@ -29,7 +29,7 @@ PostgreSQL 12+
 
     ```sh
     git clone https://github.com/ElissonRodrigues/weather_api
-    cd weather-api
+    weather_api
     ```
 
 2. Crie um ambiente virtual e ative-o:
