@@ -238,7 +238,7 @@ Exemplo de reposta
 }
 ```
 
-### Usando o Token de Acesso para utilizar Endpoints
+### Usando o Token de Acesso para fazer as requisições para o Endpoints
 
 Após obter o token de acesso, inclua-o no cabeçalho das suas requisições para acessar os endpoints. Todos os endpoints exigem autenticação.
 
