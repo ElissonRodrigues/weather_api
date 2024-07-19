@@ -240,9 +240,9 @@ Exemplo de reposta
 
 ### Usando o Token de Acesso para utilizar Endpoints
 
-Após obter o token de acesso, inclua-o no cabeçalho das suas requisições para acessar os endpoints protegidos. Todos os endpoints exigem autenticação via token.
+Após obter o token de acesso, inclua-o no cabeçalho das suas requisições para acessar os endpoints. Todos os endpoints exigem autenticação.
 
-Exemplo de uso do token de acesso para acessar um endpoint protegido:
+Exemplo de uso do token de acesso para utilizar um endpoint protegido com jwt:
 
 ```python
 import requests
@@ -258,7 +258,7 @@ token_response = requests.post(token_url, json=token_data)
 tokens = token_response.json()
 access_token = tokens["access"]
 
-# Usar o token de acesso para acessar um endpoint protegido
+# Usar o token de acesso 
 url = "http://127.0.0.1:8000/api/stations/"
 headers = {
     "Authorization": f"Bearer {access_token}"
