@@ -238,6 +238,41 @@ Exemplo de reposta
 }
 ```
 
+## Usando o Token de Acesso para utilizar Endpoints
+
+Após obter o token de acesso, inclua-o no cabeçalho das suas requisições para acessar os endpoints protegidos. Todos os endpoints exigem autenticação via token.
+
+Exemplo de uso do token de acesso para acessar um endpoint protegido:
+
+```python
+import requests
+
+# Obter o token de acesso primeiro
+token_url = "http://127.0.0.1:8000/api/token/"
+token_data = {
+    "username": "django-user",
+    "password": "django-password"
+}
+
+token_response = requests.post(token_url, json=token_data)
+tokens = token_response.json()
+access_token = tokens["access"]
+
+# Usar o token de acesso para acessar um endpoint protegido
+url = "http://127.0.0.1:8000/api/stations/"
+headers = {
+    "Authorization": f"Bearer {access_token}"
+}
+
+response = requests.get(url, headers=headers)
+if response.status_code == 200:
+    data = response.json()
+    print("Data:", data)
+else:
+    print("Ocorreu um erro:", response.json())
+
+```
+
 ## Documentação da API
 A documentação adicional da API está disponível no endpoint `/api/docs/` onde é possivel testar todos todas as funcionalidades desse projeto. A documentação é gerada automaticamente utilizando `drf-spectacular`.
 
